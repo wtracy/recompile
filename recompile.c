@@ -54,7 +54,7 @@ program_segment* append_program_segment(program_segment_array* this) {
 		++(this->array_size);
 		this->content = realloc(
 				this->content, 
-				this->data_size * sizeof(program_segment));
+				this->array_size * sizeof(program_segment));
 	}
 	++(this->data_size);
 	return &(this->content[this->data_size - 1]);
@@ -102,17 +102,19 @@ int do_read(void* buffer, ssize_t size, FILE* input) {
 	return -1; // should never happen
 }
 
-int load_chunk(ssize_t skip_amount, FILE* input, char print) {
+int skip(ssize_t skip_amount, FILE* input) {
 	char* temp;
 
-	if (skip_amount < 0){
+	/*if (skip_amount < 0){
 		return -1;
-	}
+	}*/
 
+	//fprintf(stderr, "Allocating %d bytes\n", skip_amount);
 	temp = malloc(skip_amount);
+	//fprintf(stderr, "Pulling %d bytes\n", skip_amount);
 	do_read(temp, skip_amount, input);
 
-	if (print) {
+	/*if (print) {
 		ssize_t i;
 		for (i = 0; i < skip_amount; ++i) {
 			if (i % 8 == 7) {
@@ -122,20 +124,11 @@ int load_chunk(ssize_t skip_amount, FILE* input, char print) {
 			}
 		}
 		printf("\n");
-	}
+	}*/
+	//fprintf(stderr, "Freeing those bytes\n");
 	free(temp);
 
 	return 0;
-}
-
-int skip(ssize_t skip_amount, FILE* input) {
-	fprintf(stderr,"Skipping by 0x%x\n", skip_amount);
-	return load_chunk(skip_amount, input, 0);
-}
-
-int dump(ssize_t dump_amount, FILE* input) {
-	fprintf(stderr,"Dumping 0x%x\n", dump_amount);
-	return load_chunk(dump_amount, input, 1);
 }
 
 int read_program_header(FILE* input, program_segment_array* segments) {
@@ -207,20 +200,34 @@ int parse(FILE* input) {
 
 	fprintf(stderr, "Current file offset: 0x%04x\n", amount_read);
 	dump_program_segment_array(segment);
-	
-	/*fprintf(stderr, "Machine code offset: 0x%04x\n", code_offset);
-	fprintf(stderr, "Machine code size:   0x%04x\n", code_size);*/
 
-	/*result = skip(code_offset - amount_read, input);
-	if (result < 0) {
-		fprintf(stderr,"Error skipping to code offset.\n");
-		return result;
-	} 
-	result = dump(code_size, input);
-	if (result < 0){
-		fprintf(stderr, "Error loading code chunk.\n");
-	       	return result;
-	}*/
+	for (i = 0; i < segment.data_size; ++i) {
+		program_segment current = segment.content[i];
+		if (current.offset > amount_read){
+			ssize_t skip_by = current.offset - amount_read;
+			fprintf(stderr, "Skipping ahead by %d\n", skip_by);
+			result = skip(skip_by, input);
+			amount_read = current.offset;
+		} else if (current.offset < amount_read) {
+			/* Trim a bit off of the segment accordingly, since 
+			 * we can't be bothered to go back to data we already 
+			 * read. :-) */
+			ssize_t stripped = amount_read - current.offset;
+			fprintf(stderr, "Stripping %d off the front of a segment\n", stripped);
+			current.size      -= stripped;
+			current.offset    += stripped;
+			current.v_address += stripped;
+			current.p_address += stripped;
+			segment.content[i] = current;
+		} // no compensation needed if we're already at the offset
+		current.data = malloc(current.size);
+		do_read(current.data, current.size, input);
+	}
+	dump_program_segment_array(segment);
+
+	fprintf(stderr, "...and the entry point is 0x%08x\n", header.e_entry);
+
+	free_program_segment_array(&segment);
 
 	return 0;
 }
