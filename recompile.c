@@ -2,8 +2,63 @@
 #include <stdio.h>
 #include <elf.h>
 
-Elf32_Off code_offset;
-Elf32_Word code_size;
+typedef struct {
+	Elf32_Addr p_address;
+	Elf32_Addr v_address;
+	Elf32_Off offset;
+	Elf32_Word size;
+	void* data;
+} program_segment;
+
+typedef struct {
+	ssize_t array_size;
+	ssize_t data_size;
+	program_segment* content;
+} program_segment_array;
+
+void dump_program_segment_array(program_segment_array this) {
+	ssize_t i; 
+	for (i = 0; i < this.data_size; ++i) {
+		fprintf(stderr, "LOAD Segment %d:\n", i);
+		fprintf(
+			stderr, 
+			"\tMachine code offset:           0x%08x\n", 
+			this.content[i].offset);
+		fprintf(
+			stderr, 
+			"\tMachine code virtual address:  0x%08x\n",
+			this.content[i].v_address);
+		fprintf(
+			stderr, 
+			"\tMachine code physical address: 0x%08x\n",
+			this.content[i].p_address);
+		fprintf(
+			stderr, 
+			"\tMachine code size:             0x%08x\n",
+			this.content[i].size);
+	}
+}
+
+void init_program_segment_array(program_segment_array* this) {
+	this->array_size = 1;
+	this->data_size = 0;
+	this->content = malloc(sizeof(program_segment));
+}
+
+void free_program_segment_array(program_segment_array* this) {
+	free(this->content);
+}
+
+program_segment* append_program_segment(program_segment_array* this) {
+	if (this->array_size <= this->data_size) {
+		++(this->array_size);
+		this->content = realloc(
+				this->content, 
+				this->data_size * sizeof(program_segment));
+	}
+	++(this->data_size);
+	return &(this->content[this->data_size - 1]);
+}
 
 int check_header(Elf32_Ehdr header) {
 	if (header.e_ident[0] == ELFMAG0
@@ -83,21 +138,23 @@ int dump(ssize_t dump_amount, FILE* input) {
 	return load_chunk(dump_amount, input, 1);
 }
 
-int read_program_header(FILE* input) {
+int read_program_header(FILE* input, program_segment_array* segments) {
 	Elf32_Phdr program_header;
 
 	do_read(&program_header, sizeof(program_header), input);
 	if (program_header.p_type == PT_LOAD) {
+		program_segment* segment;
 		fprintf(stderr, "Loadable segment.\n");
-		/* Yeah, this is hacky. We assume that the location of the
-		 * machine code is at the offset given in the last LOAD
-		 * segment in the program headers. So, keep a global variable
-		 * and update it every time we see another LOAD segment.
-		 * I am aware of all the myriad ways in which this could go
-		 * wrong. We're still in the proof of concept stage, okay?
-		 */
-		code_offset = program_header.p_offset;
-		code_size = program_header.p_filesz;
+		fprintf(stderr, "\tSize in file: 0x%x\n", program_header.p_filesz);
+		fprintf(stderr, "\tPhysical address: 0x%x\n", program_header.p_paddr);
+		fprintf(stderr, "\tVirtual address: 0x%x\n", program_header.p_vaddr);
+		segment = append_program_segment(segments);
+		segment->size        = program_header.p_filesz;
+		segment->v_address   = program_header.p_vaddr;
+		segment->p_address   = program_header.p_paddr;
+		segment->offset      = program_header.p_offset;
+		segment->data        = NULL;
+		//dump_program_segment_array(*segments);
 	} else if (program_header.p_type == PT_NULL) {
 		fprintf(stderr, "Null segment.\n");
 	} else if (program_header.p_type == PT_DYNAMIC) {
@@ -111,10 +168,15 @@ int read_program_header(FILE* input) {
 	} else if (program_header.p_type == PT_PHDR) {
 		fprintf(stderr, "Header table segment.\n");
 	} else {
-		fprintf(stderr, "Unknown or platform-specific segment type: 0x%x\n", program_header.p_type);
+		fprintf(
+			stderr, 
+			"Unknown or platform-specific segment type: 0x%x\n", 
+			program_header.p_type);
 	}
 
-	fprintf(stderr, "\tSegment file offset: 0x%08x\n", program_header.p_offset);
+	fprintf(
+		stderr, 
+		"\tSegment file offset: 0x%08x\n", program_header.p_offset);
 
 	return 0;
 }
@@ -124,6 +186,7 @@ int parse(FILE* input) {
 	long int result;
 	size_t amount_read = 0;
 	int i;
+	program_segment_array segment;
 	
 	result = do_read(&header, sizeof(header), input);
 
@@ -135,16 +198,20 @@ int parse(FILE* input) {
 	fprintf(stderr, "Section header offset: 0x%08x\n", header.e_shoff);
 	fprintf(stderr, "Number of headers: %d\n", header.e_phnum);
 
+	init_program_segment_array(&segment);
 	for (i = 0; i < header.e_phnum; ++i) {
-		read_program_header(input);
+		read_program_header(input, &segment);
 		amount_read += header.e_phentsize;
+		fprintf(stderr, "\tloadable segments so far: %d\n", segment.data_size);
 	}
 
 	fprintf(stderr, "Current file offset: 0x%04x\n", amount_read);
-	fprintf(stderr, "Machine code offset: 0x%04x\n", code_offset);
-	fprintf(stderr, "Machine code size:   0x%04x\n", code_size);
+	dump_program_segment_array(segment);
+	
+	/*fprintf(stderr, "Machine code offset: 0x%04x\n", code_offset);
+	fprintf(stderr, "Machine code size:   0x%04x\n", code_size);*/
 
-	result = skip(code_offset - amount_read, input);
+	/*result = skip(code_offset - amount_read, input);
 	if (result < 0) {
 		fprintf(stderr,"Error skipping to code offset.\n");
 		return result;
@@ -153,7 +220,7 @@ int parse(FILE* input) {
 	if (result < 0){
 		fprintf(stderr, "Error loading code chunk.\n");
 	       	return result;
-	}
+	}*/
 
 	return 0;
 }
