@@ -114,17 +114,6 @@ int skip(ssize_t skip_amount, FILE* input) {
 	//fprintf(stderr, "Pulling %d bytes\n", skip_amount);
 	do_read(temp, skip_amount, input);
 
-	/*if (print) {
-		ssize_t i;
-		for (i = 0; i < skip_amount; ++i) {
-			if (i % 8 == 7) {
-				printf("0x%02hhx\n", temp[i]);
-			} else {
-				printf("0x%02hhx ", temp[i]);
-			}
-		}
-		printf("\n");
-	}*/
 	//fprintf(stderr, "Freeing those bytes\n");
 	free(temp);
 
@@ -202,34 +191,77 @@ int parse(FILE* input) {
 	dump_program_segment_array(segment);
 
 	for (i = 0; i < segment.data_size; ++i) {
-		program_segment current = segment.content[i];
-		if (current.offset > amount_read){
-			ssize_t skip_by = current.offset - amount_read;
-			fprintf(stderr, "Skipping ahead by %d\n", skip_by);
+		ssize_t offset = segment.content[i].offset;
+		ssize_t size;
+		void* ptr;
+		if (offset > amount_read){
+			ssize_t skip_by = offset - amount_read;
+			//fprintf(stderr, "Skipping ahead by %d\n", skip_by);
 			result = skip(skip_by, input);
-			amount_read = current.offset;
-		} else if (current.offset < amount_read) {
+			amount_read = offset;
+		} else if (offset < amount_read) {
 			/* Trim a bit off of the segment accordingly, since 
 			 * we can't be bothered to go back to data we already 
 			 * read. :-) */
-			ssize_t stripped = amount_read - current.offset;
-			fprintf(stderr, "Stripping %d off the front of a segment\n", stripped);
-			current.size      -= stripped;
-			current.offset    += stripped;
-			current.v_address += stripped;
-			current.p_address += stripped;
-			segment.content[i] = current;
+			ssize_t stripped = amount_read - offset;
+			//fprintf(stderr, "Stripping %d off the front of a segment\n", stripped);
+			segment.content[i].size      -= stripped;
+			segment.content[i].offset    += stripped;
+			segment.content[i].v_address += stripped;
+			segment.content[i].p_address += stripped;
 		} // no compensation needed if we're already at the offset
-		current.data = malloc(current.size);
-		do_read(current.data, current.size, input);
+		size = segment.content[i].size;
+		ptr = malloc(size);
+		do_read(ptr, size, input);
+		segment.content[i].data = ptr;
 	}
 	dump_program_segment_array(segment);
 
 	fprintf(stderr, "...and the entry point is 0x%08x\n", header.e_entry);
+	
+	for (i = 0; i < segment.data_size; ++i) {
+		result = decode_segment(header.e_entry, segment.content[i]);
+		if (result < 0)
+			return result;
+		if (result > 0)
+			return 0;
+	}
 
 	free_program_segment_array(&segment);
 
 	return 0;
+}
+
+int decode_segment(Elf32_Off entry_point, program_segment current) {
+	if (entry_point < current.v_address) {
+		fprintf(stderr, "Program entry point is illegal.\n");
+		fprintf(stderr, "Entry point is 0x%08x but LOAD segment starts at 0x%08x\n", entry_point, current.v_address);
+		return -1;
+	} else if (entry_point >= current.v_address 
+			&& entry_point < current.v_address + current.size) 
+	{
+		ssize_t i;
+		char* data = current.data;
+
+		//fprintf(stderr, "Found it!\n");
+		//printf("0x%x\n", data);
+		for (i = entry_point - current.v_address; 
+				i < current.size; 
+				++i) {
+			if (i % 8 == 7) {
+				printf("0x%02hhx\n", data[i]);
+			} else {
+				printf("0x%02hhx ", data[i]);
+			}
+		}
+		printf("\n");
+
+		return 1;
+	} else {
+		//fprintf(stderr, "Is it in the range 0x%08x--0x%08x?\n", current.v_address
+		fprintf(stderr, "Nope, still looking.\n");
+		return 0;
+	}
 }
 
 int main(int argc, char** argv) {
