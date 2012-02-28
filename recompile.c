@@ -282,8 +282,19 @@ int decode_segment(Elf32_Off entry_point, program_segment current) {
 					i += 4;
 					break;
 				case 0xB8: 
+				case 0xB9: 
+				case 0xBA: 
+				case 0xBB: 
+				case 0xBC: 
+				case 0xBD: 
+				case 0xBE: 
+				case 0xBF: 
 					printf("MOV 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
 					i += 4;
+					break;
+				case 0xCD: 
+					printf("INIT 0x%02hhx \n", data[i+1]);
+					i += 1;
 					break;
 				default:
 					printf("Mystery opcode 0x%02hhx\n", data[i]);
