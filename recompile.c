@@ -241,17 +241,52 @@ int decode_segment(Elf32_Off entry_point, program_segment current) {
 			&& entry_point < current.v_address + current.size) 
 	{
 		ssize_t i;
-		char* data = current.data;
+		unsigned char* data = current.data;
 
 		//fprintf(stderr, "Found it!\n");
 		//printf("0x%x\n", data);
 		for (i = entry_point - current.v_address; 
 				i < current.size; 
 				++i) {
-			if (i % 8 == 7) {
+			/*if (i % 8 == 7) {
 				printf("0x%02hhx\n", data[i]);
 			} else {
 				printf("0x%02hhx ", data[i]);
+			}*/
+			switch (data[i]) {
+				case 0x04:
+					printf("ADD 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
+					i += 4;
+					break;
+				case 0x31:
+					printf("XOR 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
+					i += 4;
+					break;
+				case 0x50:
+				case 0x51:
+				case 0x52:
+				case 0x53:
+				case 0x54:
+				case 0x55:
+				case 0x56:
+				case 0x57:
+					printf("PUSH 0x%02hhx 0x%02hhx \n", data[i+1], data[i+2]);
+					i += 2;
+					break;
+				case 0x68:
+					printf("PUSH 0x%02hhx 0x%02hhx \n", data[i+1], data[i+2]);
+					i += 2;
+					break;
+				case 0x83:
+					printf("ADD 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
+					i += 4;
+					break;
+				case 0xB8: 
+					printf("MOV 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
+					i += 4;
+					break;
+				default:
+					printf("Mystery opcode 0x%02hhx\n", data[i]);
 			}
 		}
 		printf("\n");
