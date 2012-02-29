@@ -1,0 +1,25 @@
+This program is very much a work in process.
+
+If you want to play with it anyway, the general idea is that you feed a Linux x86-32 ELF file to stdin:
+
+$ recompile < a.out
+
+and code is written to stdout.
+
+The general idea is to decompile x86 executable to LLVM assembler code, which can then be assembled into new executables via llvm-as.
+
+The long-term goals of this project are:
+ * Apply various optimizations that LLVM is aware of to existing binaries, even proprietary ones.
+ * Modify the optimizations that were applied when an executable was initially compiled. For example, trading extra memory usage for faster performance. (Maybe you have four gigs of ram, but the developer assumed you didn't.)
+ * Recompile executables to take advantage of newer generations of an architecture. For example, converting i386 to i586 or i686 executables.
+ * (Way far out) Convert existing x86 executables to other architectures. Endianness and other issues may make this impractical.
+ * (Also way for out) Convert Win32 executables to Linux ELFs that link against libwine.
+
+The short-term goals of this project are:
+ * Give me a hands-on opportunity to learn more about x86 machine code. :-)
+ * This is where I say: “For the Hirewolf contest.”
+
+I originally started development in Haskell. I switched to C due to binary code parsing being awkward in Haskell, as well as the presence of C libraries for reading ELF header files and manipulating LLVM code.
+
+This code depends on the presence of elf.h. Generally, installing the Linux kernel source package for your distro will make this file available.
+
