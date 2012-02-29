@@ -224,13 +224,13 @@ int parse(FILE* input) {
 
 
 	
-	/*for (i = 0; i < segment.data_size; ++i) {
+	for (i = 0; i < segment.data_size; ++i) {
 		result = decode_segment(header.e_entry, segment.content[i]);
 		if (result < 0)
 			return result;
 		if (result > 0)
 			return 0;
-	}*/
+	}
 
 	free_program_segment_array(&segment);
 
