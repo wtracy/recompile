@@ -126,10 +126,10 @@ int read_program_header(FILE* input, program_segment_array* segments) {
 	do_read(&program_header, sizeof(program_header), input);
 	if (program_header.p_type == PT_LOAD) {
 		program_segment* segment;
-		fprintf(stderr, "Loadable segment.\n");
+		/*fprintf(stderr, "Loadable segment.\n");
 		fprintf(stderr, "\tSize in file: 0x%x\n", program_header.p_filesz);
 		fprintf(stderr, "\tPhysical address: 0x%x\n", program_header.p_paddr);
-		fprintf(stderr, "\tVirtual address: 0x%x\n", program_header.p_vaddr);
+		fprintf(stderr, "\tVirtual address: 0x%x\n", program_header.p_vaddr);*/
 		segment = append_program_segment(segments);
 		segment->size        = program_header.p_filesz;
 		segment->v_address   = program_header.p_vaddr;
@@ -138,17 +138,17 @@ int read_program_header(FILE* input, program_segment_array* segments) {
 		segment->data        = NULL;
 		//dump_program_segment_array(*segments);
 	} else if (program_header.p_type == PT_NULL) {
-		fprintf(stderr, "Null segment.\n");
+		//fprintf(stderr, "Null segment.\n");
 	} else if (program_header.p_type == PT_DYNAMIC) {
-		fprintf(stderr, "Dynamic segment.\n");
+		//fprintf(stderr, "Dynamic segment.\n");
 	} else if (program_header.p_type == PT_INTERP) {
-		fprintf(stderr, "Interpreter segment.\n");
+		//fprintf(stderr, "Interpreter segment.\n");
 	} else if (program_header.p_type == PT_NOTE) {
-		fprintf(stderr, "Auxiliary information segment.\n");
+		//fprintf(stderr, "Auxiliary information segment.\n");
 	} else if (program_header.p_type == PT_SHLIB) {
-		fprintf(stderr, "Reserved type segment.\n");
+		//fprintf(stderr, "Reserved type segment.\n");
 	} else if (program_header.p_type == PT_PHDR) {
-		fprintf(stderr, "Header table segment.\n");
+		//fprintf(stderr, "Header table segment.\n");
 	} else {
 		fprintf(
 			stderr, 
@@ -156,9 +156,9 @@ int read_program_header(FILE* input, program_segment_array* segments) {
 			program_header.p_type);
 	}
 
-	fprintf(
+	/*fprintf(
 		stderr, 
-		"\tSegment file offset: 0x%08x\n", program_header.p_offset);
+		"\tSegment file offset: 0x%08x\n", program_header.p_offset);*/
 
 	return 0;
 }
@@ -169,6 +169,7 @@ int parse(FILE* input) {
 	size_t amount_read = 0;
 	int i;
 	program_segment_array segment;
+	program_segment_array section;
 	
 	result = do_read(&header, sizeof(header), input);
 
@@ -178,17 +179,21 @@ int parse(FILE* input) {
 	amount_read = sizeof(header);
 	fprintf(stderr, "Program header offset: 0x%08x\n", header.e_phoff);
 	fprintf(stderr, "Section header offset: 0x%08x\n", header.e_shoff);
+	fprintf(stderr, "Section string offset: 0x%08x\n", header.e_shstrndx);
 	fprintf(stderr, "Number of headers: %d\n", header.e_phnum);
+
+	/*init_program_segment_array(&section);
+	for (i = 0; i < header.e_shnum; ++i) */
 
 	init_program_segment_array(&segment);
 	for (i = 0; i < header.e_phnum; ++i) {
 		read_program_header(input, &segment);
 		amount_read += header.e_phentsize;
-		fprintf(stderr, "\tloadable segments so far: %d\n", segment.data_size);
+		//fprintf(stderr, "\tloadable segments so far: %d\n", segment.data_size);
 	}
 
-	fprintf(stderr, "Current file offset: 0x%04x\n", amount_read);
-	dump_program_segment_array(segment);
+	/*fprintf(stderr, "Current file offset: 0x%04x\n", amount_read);
+	dump_program_segment_array(segment);*/
 
 	for (i = 0; i < segment.data_size; ++i) {
 		ssize_t offset = segment.content[i].offset;
@@ -215,17 +220,17 @@ int parse(FILE* input) {
 		do_read(ptr, size, input);
 		segment.content[i].data = ptr;
 	}
-	dump_program_segment_array(segment);
+	//dump_program_segment_array(segment);
 
-	fprintf(stderr, "...and the entry point is 0x%08x\n", header.e_entry);
+
 	
-	for (i = 0; i < segment.data_size; ++i) {
+	/*for (i = 0; i < segment.data_size; ++i) {
 		result = decode_segment(header.e_entry, segment.content[i]);
 		if (result < 0)
 			return result;
 		if (result > 0)
 			return 0;
-	}
+	}*/
 
 	free_program_segment_array(&segment);
 
