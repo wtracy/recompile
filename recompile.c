@@ -254,13 +254,13 @@ int decode_segment(Elf32_Off entry_point, program_segment current) {
 				printf("0x%02hhx ", data[i]);
 			}*/
 			switch (data[i]) {
-				case 0x04:
+				/*case 0x04:
 					printf("ADD 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
 					i += 4;
-					break;
+					break;*/
 				case 0x31:
-					printf("XOR 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
-					i += 4;
+					printf("XOR (0x%02hhx) 0x%02hhx\n", data[i+0], data[i+1]);
+					i += 1;
 					break;
 				case 0x50:
 				case 0x51:
@@ -270,16 +270,33 @@ int decode_segment(Elf32_Off entry_point, program_segment current) {
 				case 0x55:
 				case 0x56:
 				case 0x57:
-					printf("PUSH 0x%02hhx 0x%02hhx \n", data[i+1], data[i+2]);
-					i += 2;
+					printf("PUSH (0x%02hhx)\n", data[i]);
+					i += 0;
+					break;
+				case 0x58:
+				case 0x59:
+				case 0x5A:
+				case 0x5B:
+				case 0x5C:
+				case 0x5D:
+				case 0x5E:
+				case 0x5F:
+					printf("POP (0x%02hhx)\n", data[i]);
 					break;
 				case 0x68:
-					printf("PUSH 0x%02hhx 0x%02hhx \n", data[i+1], data[i+2]);
-					i += 2;
+					printf("PUSH 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx \n", data[i+1], data[i+2], data[i+3], data[i+4]);
+					i += 4;
 					break;
 				case 0x83:
-					printf("ADD 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i+1], data[i+2], data[i+3], data[i+4]);
-					i += 4;
+					printf("ADD (0x%02hhx) 0x%02hhx 0x%02hhx \n", data[i+0], data[i+1], data[i+2]);
+					i += 2;
+					break;
+				case 0x89:
+					printf("MOV (0x%02hhx) 0x%02hhx\n", data[i], data[i+1]);
+					i += 1;
+					break;
+				case 0x90:
+					printf("NOP (0x%02hhx)\n", data[i]);
 					break;
 				case 0xB8: 
 				case 0xB9: 
@@ -295,6 +312,13 @@ int decode_segment(Elf32_Off entry_point, program_segment current) {
 				case 0xCD: 
 					printf("INIT 0x%02hhx \n", data[i+1]);
 					i += 1;
+					break;
+				case 0xE8:
+					printf("CALL (0x%02hhx) 0x%02hhx 0x%02hhx 0x%02hhx 0x%02hhx\n", data[i], data[i+1], data[i+2], data[i+3], data[i+4]);
+					i += 4;
+					break;
+				case 0xF4:
+					printf("HALT (0x%02hxx)\n", data[i]);
 					break;
 				default:
 					printf("Mystery opcode 0x%02hhx\n", data[i]);

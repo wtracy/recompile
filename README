@@ -1,4 +1,4 @@
-This program is very much a work in process.
+This program is very much a work in process, and doesn't yet do anything really useful. :-(
 
 If you want to play with it anyway, the general idea is that you feed a Linux x86-32 ELF file to stdin:
 
