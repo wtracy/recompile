@@ -3,7 +3,6 @@
 #include <elf.h>
 
 typedef struct {
-	Elf32_Addr p_address;
 	Elf32_Addr v_address;
 	Elf32_Off offset;
 	Elf32_Word size;
@@ -28,10 +27,6 @@ void dump_program_segment_array(program_segment_array this) {
 			stderr, 
 			"\tMachine code virtual address:  0x%08x\n",
 			this.content[i].v_address);
-		fprintf(
-			stderr, 
-			"\tMachine code physical address: 0x%08x\n",
-			this.content[i].p_address);
 		fprintf(
 			stderr, 
 			"\tMachine code size:             0x%08x\n",
@@ -112,7 +107,6 @@ int read_program_header(
 		segment = append_program_segment(segments);
 		segment->size        = program_header.p_filesz;
 		segment->v_address   = program_header.p_vaddr;
-		segment->p_address   = program_header.p_paddr;
 		segment->offset      = program_header.p_offset;
 		segment->data        = NULL;
 		//dump_program_segment_array(*segments);
@@ -147,11 +141,16 @@ int read_section_header(
 	if (section_header.sh_type == SHT_STRTAB) {
 		program_segment* section;
 		section = append_program_segment(sections);
+		section->size        = section_header.sh_size;
+		section->v_address   = section_header.sh_addr;
+		section->offset      = section_header.sh_offset;
+		section->data        = NULL;
 		fprintf(stderr, "Found STRTAB!\n");
 		fprintf(stderr, "Offset: 0x%08x\n", section_header.sh_offset);
 	} else {
 		fprintf(stderr, "Section is not STRTAB: %d\n", section_header.sh_type);
 	}
+	fprintf(stderr, "%d sections read into RAM\n", sections->data_size);
 }
 
 int parse(FILE* input) {
@@ -208,7 +207,6 @@ int parse(FILE* input) {
 			segment.content[i].size      -= stripped;
 			segment.content[i].offset    += stripped;
 			segment.content[i].v_address += stripped;
-			segment.content[i].p_address += stripped;
 		} // no compensation needed if we're already at the offset
 		fprintf(stderr, "Reading segment at file offset: 0x%08x\n", amount_read);
 		size = segment.content[i].size;
@@ -234,13 +232,34 @@ int parse(FILE* input) {
 
 	init_program_segment_array(&section);
 	for (i = 0; i < header.e_shnum; ++i) {
-		read_section_header(input, &segment);
+		read_section_header(input, &section);
 		amount_read += header.e_shentsize;
 		fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
 	}
+	fprintf(stderr, "Read section %d headers, now reading sections\n");
+	for (i = 0; i < section.data_size; ++i) {
+		ssize_t offset = section.content[i].offset;
+		ssize_t size;
+		void* ptr;
+
+		fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
+		result = fseek(input, offset, SEEK_SET);
+		amount_read = offset;
+		if (result != 0) {
+			fprintf(stderr, "Fail finding section.\n");
+			exit(-1);
+		}
+		fprintf(stderr, "Reading section at file offset: 0x%08x\n", amount_read);
+		ptr = malloc(10);
+		result = do_read(ptr, 10, input);
+		if (result != 0) {
+			fprintf(stderr, "Fail reading section.\n");
+			exit(-1);
+		} 
+	}
+	fprintf(stderr, "Read section headers, done reading sections\n");
 
 
-	
 	for (i = 0; i < segment.data_size; ++i) {
 		result = decode_segment(header.e_entry, segment.content[i]);
 		if (result < 0)
