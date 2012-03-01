@@ -102,34 +102,13 @@ int do_read(void* buffer, ssize_t size, FILE* input) {
 	return -1; // should never happen
 }
 
-int skip(ssize_t skip_amount, FILE* input) {
-	char* temp;
-
-	/*if (skip_amount < 0){
-		return -1;
-	}*/
-
-	//fprintf(stderr, "Allocating %d bytes\n", skip_amount);
-	temp = malloc(skip_amount);
-	//fprintf(stderr, "Pulling %d bytes\n", skip_amount);
-	do_read(temp, skip_amount, input);
-
-	//fprintf(stderr, "Freeing those bytes\n");
-	free(temp);
-
-	return 0;
-}
-
-int read_program_header(FILE* input, program_segment_array* segments) {
+int read_program_header(
+		FILE* input, program_segment_array* segments) {
 	Elf32_Phdr program_header;
 
 	do_read(&program_header, sizeof(program_header), input);
 	if (program_header.p_type == PT_LOAD) {
 		program_segment* segment;
-		/*fprintf(stderr, "Loadable segment.\n");
-		fprintf(stderr, "\tSize in file: 0x%x\n", program_header.p_filesz);
-		fprintf(stderr, "\tPhysical address: 0x%x\n", program_header.p_paddr);
-		fprintf(stderr, "\tVirtual address: 0x%x\n", program_header.p_vaddr);*/
 		segment = append_program_segment(segments);
 		segment->size        = program_header.p_filesz;
 		segment->v_address   = program_header.p_vaddr;
@@ -138,17 +117,17 @@ int read_program_header(FILE* input, program_segment_array* segments) {
 		segment->data        = NULL;
 		//dump_program_segment_array(*segments);
 	} else if (program_header.p_type == PT_NULL) {
-		//fprintf(stderr, "Null segment.\n");
+		fprintf(stderr, "Null segment.\n");
 	} else if (program_header.p_type == PT_DYNAMIC) {
-		//fprintf(stderr, "Dynamic segment.\n");
+		fprintf(stderr, "Dynamic segment.\n");
 	} else if (program_header.p_type == PT_INTERP) {
-		//fprintf(stderr, "Interpreter segment.\n");
+		fprintf(stderr, "Interpreter segment.\n");
 	} else if (program_header.p_type == PT_NOTE) {
-		//fprintf(stderr, "Auxiliary information segment.\n");
+		fprintf(stderr, "Auxiliary information segment.\n");
 	} else if (program_header.p_type == PT_SHLIB) {
-		//fprintf(stderr, "Reserved type segment.\n");
+		fprintf(stderr, "Reserved type segment.\n");
 	} else if (program_header.p_type == PT_PHDR) {
-		//fprintf(stderr, "Header table segment.\n");
+		fprintf(stderr, "Header table segment.\n");
 	} else {
 		fprintf(
 			stderr, 
@@ -156,11 +135,23 @@ int read_program_header(FILE* input, program_segment_array* segments) {
 			program_header.p_type);
 	}
 
-	/*fprintf(
-		stderr, 
-		"\tSegment file offset: 0x%08x\n", program_header.p_offset);*/
-
 	return 0;
+}
+
+int read_section_header(
+		FILE* input, program_segment_array* sections) {
+	Elf32_Shdr section_header;
+
+	do_read(&section_header, sizeof(section_header), input);
+
+	if (section_header.sh_type == SHT_STRTAB) {
+		program_segment* section;
+		section = append_program_segment(sections);
+		fprintf(stderr, "Found STRTAB!\n");
+		fprintf(stderr, "Offset: 0x%08x\n", section_header.sh_offset);
+	} else {
+		fprintf(stderr, "Section is not STRTAB: %d\n", section_header.sh_type);
+	}
 }
 
 int parse(FILE* input) {
@@ -170,6 +161,7 @@ int parse(FILE* input) {
 	int i;
 	program_segment_array segment;
 	program_segment_array section;
+	fpos_t pos;
 	
 	result = do_read(&header, sizeof(header), input);
 
@@ -177,13 +169,12 @@ int parse(FILE* input) {
 		return -1;
 	}
 	amount_read = sizeof(header);
+	fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
 	fprintf(stderr, "Program header offset: 0x%08x\n", header.e_phoff);
 	fprintf(stderr, "Section header offset: 0x%08x\n", header.e_shoff);
 	fprintf(stderr, "Section string offset: 0x%08x\n", header.e_shstrndx);
 	fprintf(stderr, "Number of headers: %d\n", header.e_phnum);
-
-	/*init_program_segment_array(&section);
-	for (i = 0; i < header.e_shnum; ++i) */
+	fprintf(stderr, "Number of section headers: %d\n", header.e_shnum);
 
 	init_program_segment_array(&segment);
 	for (i = 0; i < header.e_phnum; ++i) {
@@ -192,22 +183,26 @@ int parse(FILE* input) {
 		//fprintf(stderr, "\tloadable segments so far: %d\n", segment.data_size);
 	}
 
-	/*fprintf(stderr, "Current file offset: 0x%04x\n", amount_read);
-	dump_program_segment_array(segment);*/
+	fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
+	/*dump_program_segment_array(segment);*/
 
 	for (i = 0; i < segment.data_size; ++i) {
 		ssize_t offset = segment.content[i].offset;
 		ssize_t size;
 		void* ptr;
+
+		fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
 		if (offset > amount_read){
-			ssize_t skip_by = offset - amount_read;
-			//fprintf(stderr, "Skipping ahead by %d\n", skip_by);
-			result = skip(skip_by, input);
+			result = fseek(input, offset, SEEK_SET);
 			amount_read = offset;
+			if (result != 0) {
+				fprintf(stderr, "Fail finding segment.\n");
+				exit(-1);
+			}
 		} else if (offset < amount_read) {
 			/* Trim a bit off of the segment accordingly, since 
 			 * we can't be bothered to go back to data we already 
-			 * read. :-) */
+			 * read. ;-) */
 			ssize_t stripped = amount_read - offset;
 			//fprintf(stderr, "Stripping %d off the front of a segment\n", stripped);
 			segment.content[i].size      -= stripped;
@@ -215,12 +210,34 @@ int parse(FILE* input) {
 			segment.content[i].v_address += stripped;
 			segment.content[i].p_address += stripped;
 		} // no compensation needed if we're already at the offset
+		fprintf(stderr, "Reading segment at file offset: 0x%08x\n", amount_read);
 		size = segment.content[i].size;
 		ptr = malloc(size);
-		do_read(ptr, size, input);
+		result = do_read(ptr, size, input);
+		amount_read += size;
 		segment.content[i].data = ptr;
+		if (result != 0) {
+			fprintf(stderr, "Failure reading segment!\n");
+			exit(-1);
+		}
+		fprintf(stderr, "Current file offset at end of segment: 0x%08x\n", amount_read);
 	}
-	//dump_program_segment_array(segment);
+	result = fseek(input, header.e_shoff, SEEK_SET);
+	amount_read = header.e_shoff;
+	if (result != 0) {
+		fprintf(stderr, "Failure finding section header offset!\n");
+		exit(-1);
+	}
+	fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
+	fprintf(stderr, "shentsize: %d shdr size: %d\n", header.e_shentsize, sizeof(Elf32_Shdr));
+	fprintf(stderr, "shentsize: 0x%x shdr size: 0x%x\n", header.e_shentsize, sizeof(Elf32_Shdr));
+
+	init_program_segment_array(&section);
+	for (i = 0; i < header.e_shnum; ++i) {
+		read_section_header(input, &segment);
+		amount_read += header.e_shentsize;
+		fprintf(stderr, "Current file offset: 0x%08x\n", amount_read);
+	}
 
 
 	
