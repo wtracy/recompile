@@ -15,6 +15,18 @@ typedef struct {
 	program_segment* content;
 } program_segment_array;
 
+typedef struct {
+	Elf32_Word name;
+	Elf32_Addr address;
+	Elf32_Word size;
+} program_section;
+
+typedef struct {
+	ssize_t array_size;
+	ssize_t data_size;
+	program_section* content;
+} program_section_array;
+
 void dump_program_segment_array(program_segment_array this) {
 	ssize_t i; 
 	for (i = 0; i < this.data_size; ++i) {
@@ -40,7 +52,17 @@ void init_program_segment_array(program_segment_array* this) {
 	this->content = malloc(sizeof(program_segment));
 }
 
+void init_program_section_array(program_section_array* this) {
+	this->array_size = 1;
+	this->data_size = 0;
+	this->content = malloc(sizeof(program_section));
+}
+
 void free_program_segment_array(program_segment_array* this) {
+	free(this->content);
+}
+
+void free_program_section_array(program_section_array* this) {
 	free(this->content);
 }
 
@@ -50,6 +72,17 @@ program_segment* append_program_segment(program_segment_array* this) {
 		this->content = realloc(
 				this->content, 
 				this->array_size * sizeof(program_segment));
+	}
+	++(this->data_size);
+	return &(this->content[this->data_size - 1]);
+}
+
+program_section* append_program_section(program_section_array* this) {
+	if (this->array_size <= this->data_size) {
+		++(this->array_size);
+		this->content = realloc(
+				this->content, 
+				this->array_size * sizeof(program_section));
 	}
 	++(this->data_size);
 	return &(this->content[this->data_size - 1]);
@@ -139,6 +172,7 @@ int parse(FILE* input) {
 	size_t amount_read = 0;
 	int i;
 	program_segment_array segment;
+	program_section_array section;
 	fpos_t pos;
 	char* strings = NULL;
 	size_t strings_size = 0;
@@ -259,13 +293,13 @@ int parse(FILE* input) {
 	fprintf(stderr, "Read section headers, done reading sections\n");
 
 
-	for (i = 0; i < segment.data_size; ++i) {
+	/*for (i = 0; i < segment.data_size; ++i) {
 		result = decode_segment(header.e_entry, segment.content[i]);
 		if (result < 0)
 			return result;
 		if (result > 0)
 			return 0;
-	}
+	}*/
 
 	free_program_segment_array(&segment);
 	free(strings);
