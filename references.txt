@@ -1,0 +1,10 @@
+Sources that were useful to me while developing this:
+
+http://ref.x86asm.net/geek32.html
+  -- an exhaustive table of x86 opcodes
+
+http://www.c-jump.com/CIS77/CPU/x86/lecture.html#X77_0030_encoding_format
+  -- a decent explanation of how x86 opcodes are actually encoded
+
+http://www.acsu.buffalo.edu/~charngda/elf.html
+  -- a good explanation of the Linux ELF format
